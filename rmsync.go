@@ -14,9 +14,9 @@ import (
 
 var myClient = &http.Client{Timeout: 5 * time.Minute}
 
-const BaseDir string = "/home/root/.local/share/remarkable/xochitl/"
+const baseDir string = "/home/root/.local/share/remarkable/xochitl/"
 
-type Metadata struct {
+type metadata struct {
 	Deleted          bool   `json:"deleted"`
 	DastModified     string `json:"lastModified"`
 	Metadatamodified bool   `json:"metadatamodified"`
@@ -29,11 +29,16 @@ type Metadata struct {
 	VisibleName      string `json:"visibleName"`
 }
 
+// A file in the reMarkable tablet has a filename, in the form of: "<some-uuid>.<some-extension>"
+// and a visible name, which is what users see in their screens.
 type RemarkableFile struct {
 	Filename    string
 	VisibleName string
 }
 
+// A file that needs to be synced by this library, it must have a name and an URL that will be used to download the file.
+// The name should be unique, as it will be used to decide if to download or not a file when the `Sync` function
+// iterates over the list of FileToSync given as an argument to it.
 type FileToSync struct {
 	Filename string
 	Url      string
@@ -41,7 +46,7 @@ type FileToSync struct {
 
 func getMetadataFilenames() ([]string, error) {
 	var filenames []string
-	err := filepath.Walk(BaseDir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(baseDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -57,6 +62,8 @@ func getMetadataFilenames() ([]string, error) {
 	return filenames, nil
 }
 
+// In case you want to do something with the directories existing in the reMarkable,
+// you can use this to get their filenames and visible names.
 func GetDirectoriesMetadataFiles() ([]RemarkableFile, error) {
 	filenames, err := getMetadataFilenames()
 	if err != nil {
@@ -68,7 +75,7 @@ func GetDirectoriesMetadataFiles() ([]RemarkableFile, error) {
 		if err != nil {
 			return nil, err
 		}
-		var metadata Metadata
+		var metadata metadata
 		err = json.Unmarshal(filecontent, &metadata)
 		if err != nil {
 			return nil, err
@@ -80,6 +87,8 @@ func GetDirectoriesMetadataFiles() ([]RemarkableFile, error) {
 	return directories, nil
 }
 
+// In case you want to do something with the pdf files existing in the reMarkable,
+// you can use this to get their filenames and visible names.
 func GetPdfFiles() ([]RemarkableFile, error) {
 	filenames, err := getMetadataFilenames()
 	if err != nil {
@@ -91,7 +100,7 @@ func GetPdfFiles() ([]RemarkableFile, error) {
 		if err != nil {
 			return nil, err
 		}
-		var metadata Metadata
+		var metadata metadata
 		err = json.Unmarshal(filecontent, &metadata)
 		if err != nil {
 			return nil, err
@@ -127,6 +136,8 @@ func downloadPdfFile(url string) ([]byte, error) {
 	return fileContents, nil
 }
 
+// This functions uploads a pdf, here represented as a `[]byte` to the reMarkable. This is a low level utility,
+// ideally you should use the `Sync` function and give it a list of pdfs that you want to download.
 func UploadPdfToTablet(fileContents []byte, filename string) error {
 	body := new(bytes.Buffer)
 	writer := multipart.NewWriter(body)
@@ -154,6 +165,10 @@ func UploadPdfToTablet(fileContents []byte, filename string) error {
 	return nil
 }
 
+// This function takes a list of pdf files that you want to sync. You must provide both their filenames and a public
+// URL that the tablet can use to download them. When iterating through the list of files to sync, this function
+// will first check if a file with the same name already exists, if so it will not download it again, if not it will download it
+// and then add it to the remarkable files.
 func Sync(files []FileToSync) error {
 	pdfFiles, err := GetPdfFiles()
 	if err != nil {
